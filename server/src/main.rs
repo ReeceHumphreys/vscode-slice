@@ -8,7 +8,7 @@ use serde_json::Value;
 use slicec::compilation_state::CompilationState;
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::Arc
 };
 use tokio::sync::Mutex;
 use tower_lsp::{lsp_types::*, Client, LanguageServer, LspService, Server};
@@ -144,15 +144,8 @@ impl LanguageServer for Backend {
         )
         .unwrap();
 
-        let file_name = params
-            .text_document_position_params
-            .text_document
-            .uri
-            .to_file_path()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
+        let file_name =
+            url_to_file_path(params.text_document_position_params.text_document.uri).unwrap();
 
         let position = params.text_document_position_params.position;
 
@@ -201,15 +194,8 @@ impl LanguageServer for Backend {
         )
         .unwrap();
 
-        let file_name = params
-            .text_document_position_params
-            .text_document
-            .uri
-            .to_file_path()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
+        let file_name =
+            url_to_file_path(params.text_document_position_params.text_document.uri).unwrap();
 
         let position = params.text_document_position_params.position;
 
@@ -222,41 +208,25 @@ impl LanguageServer for Backend {
             files.contains(&file_name.to_owned())
         });
 
-        // Log the configuration_set
-        if let Some(compilation_state) = configuration_set.map(|config| config.1) {
-            Ok(
+        Ok(
+            if let Some(compilation_state) = configuration_set.map(|config| config.1) {
                 get_hover_info(compilation_state, uri, position).map(|info| Hover {
                     contents: HoverContents::Scalar(MarkedString::String(info)),
                     range: None,
-                }),
-            )
-        } else {
-            // Log the configuration_set
-            Ok(None)
-        }
+                })
+            } else {
+                None
+            },
+        )
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let file_name = params
-            .text_document
-            .uri
-            .to_file_path()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
+        let file_name = url_to_file_path(params.text_document.uri).unwrap();
         self.handle_file_change(&file_name).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        let file_name = params
-            .text_document
-            .uri
-            .to_file_path()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
+        let file_name = url_to_file_path(params.text_document.uri).unwrap();
         self.handle_file_change(&file_name).await;
     }
 }
@@ -470,6 +440,11 @@ impl Backend {
                 parse_slice_configuration_sets(config_array.to_vec(), &(*root_uri).clone().unwrap())
             })
     }
+}
+
+
+fn url_to_file_path(url: Url) -> Option<String> {
+    Some(url.to_file_path().ok()?.to_str()?.to_owned())
 }
 
 fn new_default_configuration_set(
